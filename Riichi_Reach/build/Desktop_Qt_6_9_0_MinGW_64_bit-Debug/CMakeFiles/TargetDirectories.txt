@@ -1,0 +1,9 @@
+D:/QtGroupWork/Riichi Reach/Riichi_Reach/build/Desktop_Qt_6_9_0_MinGW_64_bit-Debug/CMakeFiles/Riichi_Reach.dir
+D:/QtGroupWork/Riichi Reach/Riichi_Reach/build/Desktop_Qt_6_9_0_MinGW_64_bit-Debug/CMakeFiles/edit_cache.dir
+D:/QtGroupWork/Riichi Reach/Riichi_Reach/build/Desktop_Qt_6_9_0_MinGW_64_bit-Debug/CMakeFiles/rebuild_cache.dir
+D:/QtGroupWork/Riichi Reach/Riichi_Reach/build/Desktop_Qt_6_9_0_MinGW_64_bit-Debug/CMakeFiles/list_install_components.dir
+D:/QtGroupWork/Riichi Reach/Riichi_Reach/build/Desktop_Qt_6_9_0_MinGW_64_bit-Debug/CMakeFiles/install.dir
+D:/QtGroupWork/Riichi Reach/Riichi_Reach/build/Desktop_Qt_6_9_0_MinGW_64_bit-Debug/CMakeFiles/install/local.dir
+D:/QtGroupWork/Riichi Reach/Riichi_Reach/build/Desktop_Qt_6_9_0_MinGW_64_bit-Debug/CMakeFiles/install/strip.dir
+D:/QtGroupWork/Riichi Reach/Riichi_Reach/build/Desktop_Qt_6_9_0_MinGW_64_bit-Debug/CMakeFiles/Riichi_Reach_autogen_timestamp_deps.dir
+D:/QtGroupWork/Riichi Reach/Riichi_Reach/build/Desktop_Qt_6_9_0_MinGW_64_bit-Debug/CMakeFiles/Riichi_Reach_autogen.dir
