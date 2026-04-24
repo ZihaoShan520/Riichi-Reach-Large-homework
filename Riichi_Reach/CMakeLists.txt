@@ -21,6 +21,8 @@ qt_add_executable(Riichi_Reach
     core/hand_manager.h
     manager/gamemanager.h
     manager/gamemanager.cpp
+    core/YaKuCalculator.h
+    yakucalculator.cpp
 )
 
 target_link_libraries(Riichi_Reach

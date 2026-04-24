@@ -1,115 +1,94 @@
+// gamemanager.cpp
 #include "gamemanager.h"
 #include <QDebug>
 
-GameManager::GameManager(QObject* parent)
-    : QObject(parent)
-{}
+GameManager::GameManager(QObject* parent) : QObject(parent) {}
 
-void GameManager::startGame() {
+void GameManager::startLevel() {
+    playCount = 4;
+    discardCount = 3;
     currentScore = 0;
-    targetScore = 1000;
-    turnsLeft = 10;
-    currentFloor = 1;
-
     handMgr.initDeck();
-
-    emit gameStarted();
-    emit scoreUpdated(currentScore, targetScore);
-    emit turnsUpdated(turnsLeft);
-    emit floorChanged(currentFloor);
-
-    // 初始手牌：摸5张
-    for (int i = 0; i < 5; ++i) {
-        drawTile();
-    }
+    int drawCount = qMin(18, handMgr.wallSize());
+    handMgr.drawTiles(drawCount);
+    updateUIStates();
+    emit levelStarted();
+    qDebug() << "[LEVEL START] Plays:4 Discards:3 Hand:" << handMgr.handSize();
 }
 
-void GameManager::drawTile() {
-    if (turnsLeft <= 0) return;
-
-    Tile t = handMgr.draw();
-    emit tileDrawn(t);
-    emit handChanged();
-
-    --turnsLeft;
-    emit turnsUpdated(turnsLeft);
-
-    checkFloorCondition();
+bool GameManager::tryDiscard(const std::vector<Tile>& selected) {
+    if (discardCount <= 0) { qDebug() << "[WARN] No discards left!"; return false; }
+    if (!handMgr.canDiscard(selected.size())) { qDebug() << "[WARN] Invalid discard count!"; return false; }
+    handMgr.removeTiles(selected);
+    handMgr.addToDiscard(selected);
+    int drawBack = selected.size();
+    if (handMgr.canDraw(drawBack)) handMgr.drawTiles(drawBack);
+    --discardCount;
+    updateUIStates();
+    qDebug() << "[DISCARD]" << selected.size() << "tiles | Left:" << discardCount;
+    return true;
 }
 
-void GameManager::playTiles(const std::vector<Tile>& selected) {
-    if (selected.empty()) return;
+bool GameManager::tryPlay(const std::vector<Tile>& playedSet, const std::vector<Tile>& playOrder) {
+    if (playCount <= 0) { qDebug() << "[WARN] No plays left!"; return false; }
+    if (!handMgr.canPlay(playedSet.size())) { qDebug() << "[WARN] Invalid play count (need 8~14)!"; return false; }
 
-    if (handMgr.playTiles(selected)) {
-        // 🎯 肉鸽简化计分：
-        // - 普通牌：每张100分
-        // - 赤宝牌：每张300分
-        // - 字牌：每张150分
-        int pts = 0;
-        for (const auto& t : selected) {
-            if (t.isRed) {
-                pts += 300;
-            } else if (t.isYakuhai()) {
-                pts += 150;
-            } else {
-                pts += 100;
-            }
-        }
+    handMgr.removeTiles(playedSet);
 
-        currentScore += pts;
-        emit scoreUpdated(currentScore, targetScore);
-        emit handChanged();
+    // 🔹 调用新算分系统（双参数）
+    int pts = calculatePlayScore(playedSet, playOrder);
+    currentScore += pts;
+    qDebug() << "[PLAY]" << playedSet.size() << "tiles | +" << pts << "pts | Total:" << currentScore;
 
-        qDebug() << "[Play]" << selected.size() << "tiles | +" << pts
-                 << "pts | Total:" << currentScore;
+    handMgr.addToDiscard(playedSet);
+    int drawBack = playedSet.size();
+    if (handMgr.canDraw(drawBack)) handMgr.drawTiles(drawBack);
 
-        checkFloorCondition();
+    --playCount;
+    updateUIStates();
+    checkLevelEnd();
+    return true;
+}
+
+// gamemanager.cpp
+int GameManager::calculatePlayScore(const std::vector<Tile>& playedSet, const std::vector<Tile>& playOrder) {
+    ScoreResult result = YakuCalculator::calculateScore(playedSet, playOrder);
+
+    // 🔹 调试输出：番型列表
+    qDebug() << "\n[🎯 YAKU DEBUG] ================================";
+    qDebug() << "Played tiles:" << playedSet.size();
+    qDebug() << "Base points:" << result.basePoints;
+    qDebug() << "Is Win Hand:" << (result.isWinHand ? "✓ YES" : "✗ NO");
+
+    if (result.activeYakus.empty()) {
+        qDebug() << "Active Yakus: [无役]";
     } else {
-        qDebug() << "[Error] Failed to play tiles (not in hand)";
+        qDebug() << "Active Yakus:";
+        for (YakuType yaku : result.activeYakus) {
+            qDebug() << "  •" << YakuCalculator::yakuName(yaku);
+        }
     }
+
+    qDebug() << "Total Fan:" << result.totalFan;
+    qDebug() << "Final Score:" << result.finalScore;
+    qDebug() << "[🎯 YAKU DEBUG] ================================\n";
+
+    return result.finalScore;
 }
 
-void GameManager::skipTurn() {
-    if (turnsLeft <= 0) return;
-
-    --turnsLeft;
-    emit turnsUpdated(turnsLeft);
-
-    qDebug() << "[Skip] Turns left:" << turnsLeft;
-
-    checkFloorCondition();
-}
-
-void GameManager::checkFloorCondition() {
-    if (currentScore >= targetScore) {
-        qDebug() << "🎉 Floor" << currentFloor << "Cleared!";
-        emit floorCleared();
-        nextFloor();
-    } else if (turnsLeft <= 0) {
-        qDebug() << "💀 Game Over! Final Score:" << currentScore;
-        emit gameOver(false);
-    }
-}
-
-void GameManager::nextFloor() {
-    ++currentFloor;
-    targetScore += 800; // 每层目标分+800
-    turnsLeft = 10;
-
-    // 重置牌山和手牌
-    handMgr = HandManager();
-    handMgr.initDeck();
-
-    emit floorChanged(currentFloor);
-    emit turnsUpdated(turnsLeft);
+void GameManager::updateUIStates() {
+    emit actionsUpdated(playCount, discardCount);
+    emit handUpdated();
+    emit wallSizeUpdated(handMgr.wallSize());
     emit scoreUpdated(currentScore, targetScore);
+}
 
-    // 初始手牌：摸5张
-    for (int i = 0; i < 5; ++i) {
-        Tile t = handMgr.draw();
-        emit tileDrawn(t);
+void GameManager::checkLevelEnd() {
+    if (currentScore >= targetScore) {
+        qDebug() << "[SUCCESS] Level Cleared!";
+        emit levelCleared();
+    } else if (playCount <= 0) {
+        qDebug() << "[FAIL] Out of plays!";
+        emit gameOver();
     }
-    emit handChanged();
-
-    qDebug() << "🏔️ Floor" << currentFloor << "Start | Target:" << targetScore;
 }
