@@ -39,7 +39,6 @@ public:
     static bool checkWinHand(const std::vector<Tile>& tiles);
     static QString yakuName(YakuType type);
 
-private:
     static int calculateBasePoints(const std::vector<Tile>& tiles);
 
     // 番型检测器（全部接收 vector<Tile>）

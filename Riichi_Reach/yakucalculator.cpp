@@ -185,7 +185,9 @@ bool YakuCalculator::checkPureDoubleSequence(const std::vector<Tile>& hand) {
 bool YakuCalculator::checkFourPairs(const std::vector<Tile>& hand) {
     auto counts = buildCounts(hand);
     int pairs = 0;
-    for (const auto& kv : counts) if (kv.second >= 2) pairs++;  // ✅ >=2 即可
+    for (const auto& kv : counts) {
+        if (kv.second >= 2) pairs++; // 刻子/杠包含对子，满足存在即满足
+    }
     return pairs >= 4;
 }
 
@@ -317,24 +319,34 @@ bool YakuCalculator::checkThreeConcealedPungs(const std::vector<Tile>& hand, int
 }
 
 bool YakuCalculator::checkFiveFamilies(const std::vector<Tile>& hand) {
-    bool hasMan=false, hasPin=false, hasSou=false, hasWind=false, hasDragon=false;
+    int countMan = 0, countPin = 0, countSou = 0, countWind = 0, countDragon = 0;
+
     for (const auto& t : hand) {
-        if (t.suit == TileSuit::MAN) hasMan = true;
-        else if (t.suit == TileSuit::PIN) hasPin = true;
-        else if (t.suit == TileSuit::SOU) hasSou = true;
-        else if (t.suit == TileSuit::ZI) {
-            uint8_t v = (t.value==0)?5:t.value;
-            if (v<=4) hasWind = true; else hasDragon = true;
+        switch (t.suit) {
+        case TileSuit::MAN: countMan++; break;
+        case TileSuit::PIN: countPin++; break;
+        case TileSuit::SOU: countSou++; break;
+        case TileSuit::ZI: {
+            uint8_t v = (t.value == 0) ? 5 : t.value;
+            if (v >= 1 && v <= 4) countWind++;      // 东南西北
+            else if (v >= 5 && v <= 7) countDragon++; // 白发中
+            break;
+        }
         }
     }
-    return hasMan && hasPin && hasSou && hasWind && hasDragon;
+
+    return countMan >= 2 && countPin >= 2 && countSou >= 2 && countWind >= 2 && countDragon >= 2;
 }
 
 bool YakuCalculator::checkSevenPairs(const std::vector<Tile>& hand) {
+    if (hand.size() != 14) return false;
     auto counts = buildCounts(hand);
     int pairs = 0;
-    for (const auto& kv : counts) if (kv.second == 2) pairs++;
-    return pairs >= 7;
+    for (const auto& kv : counts) {
+        if (kv.second == 2) pairs++;
+        else return false; // 出现非2张的牌，直接破坏七对结构
+    }
+    return pairs == 7;
 }
 
 bool YakuCalculator::checkTripleTriplets(const std::vector<Tile>& hand) {
@@ -491,24 +503,41 @@ bool YakuCalculator::checkOnePointRed(const std::vector<Tile>& hand) {
 std::unordered_map<YakuType, std::vector<YakuType>> YakuCalculator::buildExclusionMap() {
     using Y = YakuType;
     std::unordered_map<Y, std::vector<Y>> map;
-    map[Y::SequentialSix] = {Y::PureStraight, Y::NineGates};
-    map[Y::DragonPung] = {Y::SmallThreeDragons, Y::BigThreeDragons};
-    map[Y::PrevalentWind] = {Y::FourWinds};
-    map[Y::SeatWind] = {Y::FourWinds};
-    map[Y::PureDoubleSequence] = {Y::TwoPureDoubleSequences, Y::SevenPairs, Y::PureTripleSequence};
-    map[Y::FourPairs] = {Y::SevenPairs, Y::TwoPureDoubleSequences, Y::FourConcealedPungs, Y::FourWinds, Y::ThreeConcealedPungs, Y::PureTripleSequence};
-    map[Y::TwoConcealedPungs] = {Y::ThreeConcealedPungs, Y::FourConcealedPungs, Y::SmallThreeDragons, Y::BigThreeDragons, Y::FourWinds, Y::NineGates, Y::PureTripleSequence};
-    map[Y::SmallThreeDragons] = {Y::BigThreeDragons};
-    map[Y::PureStraight] = {Y::NineGates};
-    map[Y::AllTerminals] = {Y::MixedTerminalHonors, Y::AllHonors, Y::BigThreeDragons, Y::FourWinds};
-    map[Y::ThreeConcealedPungs] = {Y::BigThreeDragons, Y::FourWinds, Y::FourConcealedPungs, Y::PureTripleSequence};
-    map[Y::FiveFamilies] = {};
-    map[Y::MixedTerminalHonors] = {Y::BigThreeDragons, Y::FourWinds, Y::AllHonors};
-    map[Y::FullFlush] = {Y::MillionStone, Y::OnePointRed, Y::NineGates};
-    map[Y::FourConcealedPungs] = {Y::FourWinds};
-    map[Y::BigThreeDragons] = {Y::AllHonors};
-    map[Y::FourWinds] = {Y::AllHonors};
-    map[Y::FullGreen] = {Y::FullFlush};
+
+    // 1番系覆盖
+    map[Y::SequentialSix]       = {Y::PureStraight, Y::NineGates};
+    map[Y::DragonPung]          = {Y::BigThreeDragons};
+    map[Y::PrevalentWind]       = {Y::FourWinds};
+    map[Y::SeatWind]            = {Y::FourWinds};
+    map[Y::PureDoubleSequence]  = {Y::TwoPureDoubleSequences, Y::SevenPairs, Y::PureTripleSequence};
+
+    // 2番系覆盖
+    map[Y::FourPairs]           = {Y::SevenPairs, Y::TwoPureDoubleSequences, Y::FourConcealedPungs, Y::FourWinds, Y::ThreeConcealedPungs, Y::PureTripleSequence};
+    map[Y::TwoConcealedPungs]   = {Y::ThreeConcealedPungs, Y::FourConcealedPungs, Y::SmallThreeDragons, Y::BigThreeDragons, Y::FourWinds, Y::NineGates, Y::PureTripleSequence};
+    map[Y::PureStraight]        = {Y::NineGates};
+    map[Y::AllTerminals]        = {Y::MixedTerminalHonors, Y::AllHonors, Y::BigThreeDragons, Y::FourWinds};
+    map[Y::ThreeConcealedPungs] = {Y::TwoConcealedPungs, Y::FourConcealedPungs, Y::BigThreeDragons, Y::FourWinds, Y::PureTripleSequence};
+    map[Y::FiveFamilies]        = {}; // 国士无双由上层单独处理
+
+    // 3番系覆盖（核心修复：七对必须覆盖四对/一杯口）
+    map[Y::SevenPairs]          = {Y::FourPairs, Y::PureDoubleSequence};
+    map[Y::MixedTerminalHonors] = {Y::AllTerminals, Y::BigThreeDragons, Y::FourWinds, Y::AllHonors};
+    map[Y::TwoPureDoubleSequences] = {Y::FourPairs, Y::PureDoubleSequence};
+
+    // 5番系覆盖
+    map[Y::FullFlush]           = {Y::MillionStone, Y::OnePointRed, Y::NineGates, Y::FullGreen};
+    map[Y::PureTripleSequence]  = {Y::ThreeConcealedPungs, Y::TwoConcealedPungs, Y::FourPairs, Y::PureDoubleSequence};
+
+    // 13番系覆盖
+    map[Y::AllHonors]           = {};
+    map[Y::BigThreeDragons]     = {Y::AllHonors, Y::SmallThreeDragons, Y::DragonPung};
+    map[Y::FourConcealedPungs]  = {Y::FourWinds, Y::ThreeConcealedPungs, Y::TwoConcealedPungs, Y::FourPairs};
+    map[Y::FullGreen]           = {Y::FullFlush};
+    map[Y::FourWinds]           = {Y::AllHonors, Y::BigThreeDragons};
+    map[Y::NineGates]           = {Y::FullFlush, Y::SequentialSix, Y::PureStraight};
+    map[Y::MillionStone]        = {Y::FullFlush};
+    map[Y::OnePointRed]         = {Y::FullFlush};
+
     return map;
 }
 
@@ -542,6 +571,9 @@ ScoreResult YakuCalculator::calculateScore(const std::vector<Tile>& played,
     if (checkSequentialSix(played)) active.push_back({YakuType::SequentialSix, 1, "连六"});
     if (checkAllSimples(played)) active.push_back({YakuType::AllSimples, 1, "断幺"});
 
+    int pungCnt = 0;
+    if (checkTwoConcealedPungs(played, pungCnt)) active.push_back({YakuType::TwoConcealedPungs, 2, "双暗刻"});
+
     int dragonCnt = 0;
     if (checkDragonPung(played, dragonCnt)) active.push_back({YakuType::DragonPung, dragonCnt, "三元牌"});
     if (checkWindPung(played, prevalentWind)) active.push_back({YakuType::PrevalentWind, 1, "场风牌"});
@@ -550,8 +582,6 @@ ScoreResult YakuCalculator::calculateScore(const std::vector<Tile>& played,
 
     // 2番系
     if (checkFourPairs(played)) active.push_back({YakuType::FourPairs, 2, "四对"});
-    int pungCnt = 0;
-    if (checkTwoConcealedPungs(played, pungCnt)) active.push_back({YakuType::TwoConcealedPungs, 2, "双暗刻"});
     int quadCnt = 0;
     if (checkFourIdentical(played, quadCnt)) active.push_back({YakuType::FourIdentical, quadCnt * 2, "四归一"});
     if (checkSmallThreeDragons(played)) active.push_back({YakuType::SmallThreeDragons, 2, "小三元"});

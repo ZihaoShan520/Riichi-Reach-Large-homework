@@ -12,6 +12,8 @@
 #include <algorithm>
 #include <QMouseEvent>
 #include <QCursor>
+#include <QScreen>
+#include <QGuiApplication>
 
 // ============ 可点击的牌面标签 ============
 class TileLabel : public QLabel {
@@ -80,7 +82,7 @@ public:
         setupUI();
     }
 
-    // 🔹 新增：返回双列表结构
+    // 🔹 返回双列表结构（出牌用）
     struct SelectionResult {
         std::vector<Tile> playedSet;   // 用于番型/和牌判定
         std::vector<Tile> playOrder;   // 用于无役前5张计分（保持点击顺序）
@@ -99,7 +101,7 @@ public:
 
     void clearSelection() {
         for (int i = 0; i < isSelected.size(); ++i) isSelected[i] = false;
-        clickedOrder.clear();  // ✅ 清空点击顺序
+        clickedOrder.clear();
         refreshTileStyles();
     }
 
@@ -109,6 +111,14 @@ public slots:
     }
     void updateActions(int plays, int discards) {
         actionLabel->setText(QString("Plays: %1 | Discards: %2").arg(plays).arg(discards));
+    }
+    // 🔹 新增：更新关卡与风场信息
+    void updateLevelInfo(int tier, int level, int prevWind, int seatWind, bool infinite) {
+        static const QString windNames[] = {"", "東", "南", "西", "北"};
+        QString infTag = infinite ? " [∞]" : "";
+        levelLabel->setText(QString("Tier: %1 | Level: %2%3").arg(tier).arg(level).arg(infTag));
+        windLabel->setText(QString("場風: %1 | 自風: %2")
+                               .arg(windNames[prevWind]).arg(windNames[seatWind]));
     }
     void refreshHand(const std::vector<Tile>& hand) {
         rebuildHandUI(hand, false);
@@ -126,16 +136,30 @@ private:
         mainLayout->setContentsMargins(20, 20, 20, 20);
         mainLayout->setSpacing(12);
 
+        // HUD
         hudLabel = new QLabel("Score: 0 / 2000", this);
         hudLabel->setStyleSheet("color: white; font-size: 18px; background: #0f3460; padding: 8px; border-radius: 6px;");
         hudLabel->setAlignment(Qt::AlignCenter);
         mainLayout->addWidget(hudLabel);
 
+        // 行动次数
         actionLabel = new QLabel("Plays: 4 | Discards: 3", this);
         actionLabel->setStyleSheet("color: #a0c4ff; font-size: 14px; background: #0f3460; padding: 6px; border-radius: 6px;");
         actionLabel->setAlignment(Qt::AlignCenter);
         mainLayout->addWidget(actionLabel);
 
+        // 🔹 新增：关卡与风场显示
+        levelLabel = new QLabel("Tier: 1 | Level: 1", this);
+        levelLabel->setStyleSheet("color: #ffd166; font-size: 14px; background: #0f3460; padding: 6px; border-radius: 6px;");
+        levelLabel->setAlignment(Qt::AlignCenter);
+        mainLayout->addWidget(levelLabel);
+
+        windLabel = new QLabel("場風: 東 | 自風: 東", this);
+        windLabel->setStyleSheet("color: #a0c4ff; font-size: 14px; background: #0f3460; padding: 6px; border-radius: 6px;");
+        windLabel->setAlignment(Qt::AlignCenter);
+        mainLayout->addWidget(windLabel);
+
+        // 手牌滚动区
         auto* scroll = new QScrollArea(this);
         scroll->setWidgetResizable(true);
         scroll->setStyleSheet("border: none; background: transparent;");
@@ -148,6 +172,7 @@ private:
         scroll->setWidget(handContainerWidget);
         mainLayout->addWidget(scroll, 1);
 
+        // 控制按钮
         auto* ctrlLayout = new QHBoxLayout();
         playBtn = new QPushButton("出牌 (PLAY 8-14)");
         discardBtn = new QPushButton("弃牌 (DISCARD 1-14)");
@@ -161,22 +186,21 @@ private:
         ctrlLayout->addStretch();
         mainLayout->addLayout(ctrlLayout);
 
+        // 按钮连接
         connect(playBtn, &QPushButton::clicked, this, [this]() {
             auto sel = getSelectionResult();
             if (sel.playedSet.size() < 8 || sel.playedSet.size() > 14) {
                 qDebug() << "[WARN] Play requires 8~14 tiles!";
                 return;
             }
-            emit playRequested(sel.playedSet, sel.playOrder);  // ✅ 传递双参数
+            emit playRequested(sel.playedSet, sel.playOrder);
         });
 
         connect(discardBtn, &QPushButton::clicked, this, [this]() {
-            // ✅ 内联收集已选牌（弃牌不需要顺序，直接用 isSelected + handTiles）
             QVector<Tile> sel;
             for (int i = 0; i < isSelected.size(); ++i) {
                 if (isSelected[i]) sel.append(handTiles[i]);
             }
-
             if (sel.isEmpty() || sel.size() > 14) {
                 qDebug() << "[WARN] Discard requires 1~14 tiles!";
                 return;
@@ -230,7 +254,6 @@ private:
 
             int idx = static_cast<int>(i);
 
-            // ✅ 点击时记录/移除顺序
             connect(label, &TileLabel::clicked, this, [this, idx, t = renderHand[idx]]() {
                 if (idx < isSelected.size()) {
                     isSelected[idx] = !isSelected[idx];
@@ -280,43 +303,38 @@ private:
 
 private:
     QLabel *hudLabel = nullptr, *actionLabel = nullptr;
+    QLabel *levelLabel = nullptr, *windLabel = nullptr;  // 🔹 新增
     QHBoxLayout* handLayout = nullptr;
     QWidget* handContainerWidget = nullptr;
     QVector<TileLabel*> tileLabels;
     QVector<Tile> handTiles;
     QVector<bool> isSelected;
-    QVector<Tile> clickedOrder;  // ✅ 新增：记录点击顺序
+    QVector<Tile> clickedOrder;
     QPushButton *playBtn = nullptr, *discardBtn = nullptr, *backBtn = nullptr;
 };
 
 // ============ 主窗口实现 ============
 Widget::Widget(QWidget *parent) : QWidget(parent) {
-    // 检查当前屏幕DPI
+    // DPI 适配
     QScreen* screen = this->screen() ? this->screen() : QGuiApplication::primaryScreen();
     qreal dpi = screen->logicalDotsPerInch();
-
-    // 根据DPI调整窗口大小
     if (dpi > 96) {
-        // 高DPI显示器，按比例增大窗口
         qreal scale = dpi / 96.0;
-        setFixedSize(static_cast<int>(1280 * scale),
-                     static_cast<int>(720 * scale));
+        setFixedSize(static_cast<int>(1280 * scale), static_cast<int>(720 * scale));
     } else {
         setFixedSize(1280, 720);
     }
-    setupUI(); }
+    setupUI();
+}
+
 Widget::~Widget() = default;
 
 void Widget::setupUI() {
     setWindowTitle("Riichi_Reach");
-    // 获取主屏幕的大小
     QScreen *screen = QGuiApplication::primaryScreen();
     QRect screenGeometry = screen->geometry();
-    int width = screenGeometry.width();
-    int height = screenGeometry.height();
-
-    // 设置窗口为主屏幕的 90% 大小
-    setFixedSize(static_cast<int>(width * 0.7), static_cast<int>(height * 0.7));
+    setFixedSize(static_cast<int>(screenGeometry.width() * 0.7),
+                 static_cast<int>(screenGeometry.height() * 0.7));
 
     stackedViews = new QStackedWidget(this);
     gameMgr    = new GameManager(this);
@@ -327,11 +345,13 @@ void Widget::setupUI() {
     stackedViews->addWidget(gameView);
     stackedViews->setCurrentIndex(0);
 
+    // 🔹 关键：连接关卡信息信号（需 GameManager 已实现 levelInfoUpdated）
+    connect(gameMgr, &GameManager::levelInfoUpdated, gameView, &GameView::updateLevelInfo);
+
     connect(menuView, &MenuView::startRequested, gameMgr, &GameManager::startLevel);
     connect(menuView, &MenuView::startRequested, [this]() { stackedViews->setCurrentIndex(1); });
     connect(gameView, &GameView::returnToMenuRequested, [this]() { stackedViews->setCurrentIndex(0); });
 
-    // ✅ 连接双参数信号
     connect(gameView, &GameView::playRequested, [this](const std::vector<Tile>& playedSet, const std::vector<Tile>& playOrder) {
         if (gameMgr->tryPlay(playedSet, playOrder)) gameView->clearSelection();
     });

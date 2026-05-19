@@ -12,6 +12,7 @@ public:
     explicit GameManager(QObject* parent = nullptr);
 
     void startLevel();
+    void startGame();
     bool tryDiscard(const std::vector<Tile>& selected);
     bool tryPlay(const std::vector<Tile>& playedSet, const std::vector<Tile>& playOrder);  // ✅ 双参数
 
@@ -30,6 +31,7 @@ signals:
     void scoreUpdated(int current, int target);
     void levelCleared();
     void gameOver();
+    void levelInfoUpdated(int tier, int level, int prevWind, int seatWind, bool infinite);
 
 private:
     HandManager handMgr;
@@ -42,4 +44,19 @@ private:
     void updateUIStates();
     void checkLevelEnd();
     int calculatePlayScore(const std::vector<Tile>& playedSet, const std::vector<Tile>& playOrder);  // ✅ 双参数
+
+    int currentTier = 1;
+    int currentLevelInTier = 1;
+    int currentPrevalentWind = 1; // 1=东, 2=南, 3=西, 4=北
+    int currentSeatWind = 1;
+    bool infiniteMode = false;
+
+    int baseTierPrevWind = 1;      // 第一层初始场风种子
+    int currentTierBaseSeatWind = 1; // 当前层初始自风种子
+
+    void calculateCurrentWinds();
+    void loadLevelConfig();
+    void advanceLevel();
+    void handleFailure();
+    static QString windToString(int windVal); // UI辅助
 };
