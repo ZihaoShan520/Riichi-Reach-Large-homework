@@ -290,12 +290,33 @@ private:
 };
 
 // ============ 主窗口实现 ============
-Widget::Widget(QWidget *parent) : QWidget(parent) { setupUI(); }
+Widget::Widget(QWidget *parent) : QWidget(parent) {
+    // 检查当前屏幕DPI
+    QScreen* screen = this->screen() ? this->screen() : QGuiApplication::primaryScreen();
+    qreal dpi = screen->logicalDotsPerInch();
+
+    // 根据DPI调整窗口大小
+    if (dpi > 96) {
+        // 高DPI显示器，按比例增大窗口
+        qreal scale = dpi / 96.0;
+        setFixedSize(static_cast<int>(1280 * scale),
+                     static_cast<int>(720 * scale));
+    } else {
+        setFixedSize(1280, 720);
+    }
+    setupUI(); }
 Widget::~Widget() = default;
 
 void Widget::setupUI() {
     setWindowTitle("Riichi_Reach");
-    setFixedSize(1280, 720);
+    // 获取主屏幕的大小
+    QScreen *screen = QGuiApplication::primaryScreen();
+    QRect screenGeometry = screen->geometry();
+    int width = screenGeometry.width();
+    int height = screenGeometry.height();
+
+    // 设置窗口为主屏幕的 90% 大小
+    setFixedSize(static_cast<int>(width * 0.7), static_cast<int>(height * 0.7));
 
     stackedViews = new QStackedWidget(this);
     gameMgr    = new GameManager(this);
