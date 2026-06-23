@@ -16,12 +16,7 @@ enum class YakuType : uint8_t {
     NineGates, MillionStone, OnePointRed
 };
 
-struct YakuResult {
-    YakuType type;
-    int fan;
-    std::string name;
-};
-
+struct YakuResult { YakuType type; int fan; std::string name; };
 struct ScoreResult {
     int basePoints = 0;
     double totalFan = 0.0;
@@ -32,16 +27,17 @@ struct ScoreResult {
 
 class YakuCalculator {
 public:
+    // 🔹 新增 doraTile 参数
     static ScoreResult calculateScore(const std::vector<Tile>& played,
                                       const std::vector<Tile>& playOrder,
                                       uint8_t prevalentWind = 1,
-                                      uint8_t seatWind = 1);
+                                      uint8_t seatWind = 1,
+                                      const Tile& doraTile = {});
     static bool checkWinHand(const std::vector<Tile>& tiles);
     static QString yakuName(YakuType type);
-
     static int calculateBasePoints(const std::vector<Tile>& tiles);
 
-    // 番型检测器（全部接收 vector<Tile>）
+    // 番型检测器
     static bool checkNoYaku(const std::vector<Tile>&, const std::vector<Tile>&);
     static bool checkSequentialSix(const std::vector<Tile>&);
     static bool checkAllSimples(const std::vector<Tile>&);

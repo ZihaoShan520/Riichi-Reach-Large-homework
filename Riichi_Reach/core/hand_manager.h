@@ -21,7 +21,7 @@ public:
             for (uint8_t v = 1; v <= 9; ++v) {
                 for (int i = 0; i < 4; ++i) {
                     bool red = (v == 5 && i == 0);
-                    wall.push_back({suit, red ? 0 : v, red});
+                    wall.push_back({suit, red ? static_cast<uint8_t>(0) : v, red});
                 }
             }
         };

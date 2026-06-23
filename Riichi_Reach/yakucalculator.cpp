@@ -4,44 +4,19 @@
 #include <map>
 #include <unordered_set>
 #include <functional>
-#include <Qstring>
+#include <QString>
 
-// 🔹 修复：显式 switch 生成 key，避免字符串拼接歧义
 static std::map<std::string, int> buildCounts(const std::vector<Tile>& hand) {
     std::map<std::string, int> counts;
     for (const auto& t : hand) {
-        uint8_t val = (t.value == 0) ? 5 : t.value;  // 赤宝按5处理
-        std::string key;
-        switch (t.suit) {
-        case TileSuit::MAN: key = std::to_string(val) + 'm'; break;
-        case TileSuit::PIN: key = std::to_string(val) + 'p'; break;
-        case TileSuit::SOU: key = std::to_string(val) + 's'; break;
-        case TileSuit::ZI:  key = std::to_string(val) + 'z'; break;
-        }
+        uint8_t val = (t.value == 0) ? 5 : t.value;
+        std::string key = std::to_string(val) + "mps z"[static_cast<int>(t.suit)];
         counts[key]++;
-    }
-    return counts;
+    } return counts;
 }
-
-static bool isTerminalOrHonor(const Tile& t) {
-    uint8_t v = (t.value == 0) ? 5 : t.value;
-    return t.suit == TileSuit::ZI || v == 1 || v == 9;
-}
-
-static bool isSymmetric(const Tile& t) {
-    uint8_t v = (t.value == 0) ? 5 : t.value;
-    if (t.suit == TileSuit::SOU && (v==2||v==4||v==5||v==6||v==8||v==9)) return true;
-    if (t.suit == TileSuit::PIN && (v==1||v==2||v==3||v==4||v==5||v==8||v==9)) return true;
-    if (t.suit == TileSuit::ZI && v == 5) return true;
-    return false;
-}
-
-static bool isGreen(const Tile& t) {
-    uint8_t v = (t.value == 0) ? 5 : t.value;
-    if (t.suit == TileSuit::SOU && (v==2||v==3||v==4||v==6||v==8)) return true;
-    if (t.suit == TileSuit::ZI && v == 6) return true;
-    return false;
-}
+static bool isTerminalOrHonor(const Tile& t) { uint8_t v=(t.value==0)?5:t.value; return t.suit==TileSuit::ZI||v==1||v==9; }
+static bool isSymmetric(const Tile& t) { uint8_t v=(t.value==0)?5:t.value; return (t.suit==TileSuit::SOU&&(v==2||v==4||v==5||v==6||v==8||v==9))||(t.suit==TileSuit::PIN&&(v==1||v==2||v==3||v==4||v==5||v==8||v==9))||(t.suit==TileSuit::ZI&&v==5); }
+static bool isGreen(const Tile& t) { uint8_t v=(t.value==0)?5:t.value; return (t.suit==TileSuit::SOU&&(v==2||v==3||v==4||v==6||v==8))||(t.suit==TileSuit::ZI&&v==6); }
 
 // 🔹 和牌判定（支持标准型/七对/国士无双）
 bool YakuCalculator::checkWinHand(const std::vector<Tile>& tiles) {
@@ -54,7 +29,6 @@ bool YakuCalculator::checkWinHand(const std::vector<Tile>& tiles) {
         int pairs = 0;
         for (const auto& kv : counts) {
             if (kv.second == 2) pairs++;
-            else if (kv.second != 4) return false;
         }
         if (pairs >= 7) return true;
     }
@@ -63,14 +37,25 @@ bool YakuCalculator::checkWinHand(const std::vector<Tile>& tiles) {
     if (n == 14) {
         auto counts = buildCounts(tiles);
         std::vector<std::string> terminals = {"1m","9m","1p","9p","1s","9s","1z","2z","3z","4z","5z","6z","7z"};
-        bool hasPair = false;
+        bool hasPair = false, checkflagguoshi = 1;
         for (const auto& key : terminals) {
             auto it = counts.find(key);
-            if (it == counts.end()) return false;
-            if (it->second == 2) { if (hasPair) return false; hasPair = true; }
-            else if (it->second != 1) return false;
+            if (it == counts.end()){
+                checkflagguoshi = 0;
+                break;
+            }
+            if (it->second == 2) {
+                if (hasPair) {
+                    checkflagguoshi = 0;
+                    break;
+                }
+                hasPair = true; }
+            else if (it->second != 1) {
+                checkflagguoshi = 0;
+                break;
+            }
         }
-        if (counts.size() == 13 || (counts.size() == 12 && hasPair)) return true;
+        if (counts.size() == 13 && hasPair && checkflagguoshi) return true;
     }
 
     // 标准型：雀头 + N面子
@@ -117,7 +102,6 @@ bool YakuCalculator::checkWinHand(const std::vector<Tile>& tiles) {
     }
     return false;
 }
-
 int YakuCalculator::calculateBasePoints(const std::vector<Tile>& tiles) {
     int pts = 0;
     for (const auto& t : tiles) {
@@ -127,7 +111,7 @@ int YakuCalculator::calculateBasePoints(const std::vector<Tile>& tiles) {
     return pts;
 }
 
-// ===== 番型检测器（修复版）=====
+// ===== 番型检测器 =====
 bool YakuCalculator::checkNoYaku(const std::vector<Tile>&, const std::vector<Tile>&) { return true; }
 
 bool YakuCalculator::checkSequentialSix(const std::vector<Tile>& hand) {
@@ -181,21 +165,17 @@ bool YakuCalculator::checkPureDoubleSequence(const std::vector<Tile>& hand) {
     return false;
 }
 
-// 🔹 修复：四对检测（>=2张即算对子）
 bool YakuCalculator::checkFourPairs(const std::vector<Tile>& hand) {
     auto counts = buildCounts(hand);
     int pairs = 0;
-    for (const auto& kv : counts) {
-        if (kv.second >= 2) pairs++; // 刻子/杠包含对子，满足存在即满足
-    }
+    for (const auto& kv : counts) if (kv.second >= 2) pairs++;
     return pairs >= 4;
 }
 
-// 🔹 修复：双暗刻检测（>=3张即算刻子）
 bool YakuCalculator::checkTwoConcealedPungs(const std::vector<Tile>& hand, int& outCount) {
     auto counts = buildCounts(hand);
     outCount = 0;
-    for (const auto& kv : counts) if (kv.second >= 3) outCount++;  // ✅ >=3 即可
+    for (const auto& kv : counts) if (kv.second >= 3) outCount++;
     return outCount >= 2;
 }
 
@@ -252,32 +232,25 @@ bool YakuCalculator::checkMixedTripleSequence(const std::vector<Tile>& hand) {
     return false;
 }
 
-// 🔹 替换 yakucalculator.cpp 中的原 checkAllTerminals 函数
 bool YakuCalculator::checkAllTerminals(const std::vector<Tile>& hand) {
     auto counts = buildCounts(hand);
-
-    // 递归回溯：尝试从计数表中提取 needed 个含幺九的面子
     std::function<bool(std::map<std::string, int>&, int)> extractTerminalMelds =
         [&](std::map<std::string, int>& cnt, int needed) -> bool {
         if (needed == 0) return true;
         if (cnt.empty()) return false;
-
         auto it = cnt.begin();
         std::string key = it->first;
         int val = std::stoi(key);
         char suit = key.back();
         bool isTerm = (suit == 'z' || val == 1 || val == 9);
 
-        // 1. 尝试用当前牌组成刻子（仅限幺九/字牌）
         if (isTerm && it->second >= 3) {
             auto next = cnt;
             next[key] -= 3; if (next[key] == 0) next.erase(key);
             if (extractTerminalMelds(next, needed - 1)) return true;
         }
-
-        // 2. 尝试组成含幺九的顺子（仅 123 或 789）
         if (suit != 'z') {
-            if (val == 1) { // 123
+            if (val == 1) {
                 std::string k2 = std::to_string(val+1) + suit;
                 std::string k3 = std::to_string(val+2) + suit;
                 auto it2 = cnt.find(k2), it3 = cnt.find(k3);
@@ -288,7 +261,7 @@ bool YakuCalculator::checkAllTerminals(const std::vector<Tile>& hand) {
                     next[k3]--; if(next[k3]==0) next.erase(k3);
                     if (extractTerminalMelds(next, needed - 1)) return true;
                 }
-            } else if (val == 7) { // 789
+            } else if (val == 7) {
                 std::string k2 = std::to_string(val+1) + suit;
                 std::string k3 = std::to_string(val+2) + suit;
                 auto it2 = cnt.find(k2), it3 = cnt.find(k3);
@@ -301,14 +274,11 @@ bool YakuCalculator::checkAllTerminals(const std::vector<Tile>& hand) {
                 }
             }
         }
-
-        // 3. 当前牌无法参与构成有效面子，跳过并继续搜索
         auto skip = cnt;
         skip[key]--; if (skip[key] == 0) skip.erase(key);
         return extractTerminalMelds(skip, needed);
     };
-
-    return extractTerminalMelds(counts, 3); // 需成功提取3组
+    return extractTerminalMelds(counts, 3);
 }
 
 bool YakuCalculator::checkThreeConcealedPungs(const std::vector<Tile>& hand, int& outCount) {
@@ -320,7 +290,6 @@ bool YakuCalculator::checkThreeConcealedPungs(const std::vector<Tile>& hand, int
 
 bool YakuCalculator::checkFiveFamilies(const std::vector<Tile>& hand) {
     int countMan = 0, countPin = 0, countSou = 0, countWind = 0, countDragon = 0;
-
     for (const auto& t : hand) {
         switch (t.suit) {
         case TileSuit::MAN: countMan++; break;
@@ -328,13 +297,12 @@ bool YakuCalculator::checkFiveFamilies(const std::vector<Tile>& hand) {
         case TileSuit::SOU: countSou++; break;
         case TileSuit::ZI: {
             uint8_t v = (t.value == 0) ? 5 : t.value;
-            if (v >= 1 && v <= 4) countWind++;      // 东南西北
-            else if (v >= 5 && v <= 7) countDragon++; // 白发中
+            if (v >= 1 && v <= 4) countWind++;
+            else if (v >= 5 && v <= 7) countDragon++;
             break;
         }
         }
     }
-
     return countMan >= 2 && countPin >= 2 && countSou >= 2 && countWind >= 2 && countDragon >= 2;
 }
 
@@ -344,7 +312,7 @@ bool YakuCalculator::checkSevenPairs(const std::vector<Tile>& hand) {
     int pairs = 0;
     for (const auto& kv : counts) {
         if (kv.second == 2) pairs++;
-        else return false; // 出现非2张的牌，直接破坏七对结构
+        else return false;
     }
     return pairs == 7;
 }
@@ -503,41 +471,24 @@ bool YakuCalculator::checkOnePointRed(const std::vector<Tile>& hand) {
 std::unordered_map<YakuType, std::vector<YakuType>> YakuCalculator::buildExclusionMap() {
     using Y = YakuType;
     std::unordered_map<Y, std::vector<Y>> map;
-
-    // 1番系覆盖
-    map[Y::SequentialSix]       = {Y::PureStraight, Y::NineGates};
-    map[Y::DragonPung]          = {Y::BigThreeDragons};
-    map[Y::PrevalentWind]       = {Y::FourWinds};
-    map[Y::SeatWind]            = {Y::FourWinds};
-    map[Y::PureDoubleSequence]  = {Y::TwoPureDoubleSequences, Y::SevenPairs, Y::PureTripleSequence};
-
-    // 2番系覆盖
-    map[Y::FourPairs]           = {Y::SevenPairs, Y::TwoPureDoubleSequences, Y::FourConcealedPungs, Y::FourWinds, Y::ThreeConcealedPungs, Y::PureTripleSequence};
-    map[Y::TwoConcealedPungs]   = {Y::ThreeConcealedPungs, Y::FourConcealedPungs, Y::SmallThreeDragons, Y::BigThreeDragons, Y::FourWinds, Y::NineGates, Y::PureTripleSequence};
-    map[Y::PureStraight]        = {Y::NineGates};
-    map[Y::AllTerminals]        = {Y::MixedTerminalHonors, Y::AllHonors, Y::BigThreeDragons, Y::FourWinds};
-    map[Y::ThreeConcealedPungs] = {Y::TwoConcealedPungs, Y::FourConcealedPungs, Y::BigThreeDragons, Y::FourWinds, Y::PureTripleSequence};
-    map[Y::FiveFamilies]        = {}; // 国士无双由上层单独处理
-
-    // 3番系覆盖（核心修复：七对必须覆盖四对/一杯口）
-    map[Y::SevenPairs]          = {Y::FourPairs, Y::PureDoubleSequence};
-    map[Y::MixedTerminalHonors] = {Y::AllTerminals, Y::BigThreeDragons, Y::FourWinds, Y::AllHonors};
-    map[Y::TwoPureDoubleSequences] = {Y::FourPairs, Y::PureDoubleSequence};
-
-    // 5番系覆盖
-    map[Y::FullFlush]           = {Y::MillionStone, Y::OnePointRed, Y::NineGates, Y::FullGreen};
-    map[Y::PureTripleSequence]  = {Y::ThreeConcealedPungs, Y::TwoConcealedPungs, Y::FourPairs, Y::PureDoubleSequence};
-
-    // 13番系覆盖
-    map[Y::AllHonors]           = {};
-    map[Y::BigThreeDragons]     = {Y::AllHonors, Y::SmallThreeDragons, Y::DragonPung};
-    map[Y::FourConcealedPungs]  = {Y::FourWinds, Y::ThreeConcealedPungs, Y::TwoConcealedPungs, Y::FourPairs};
-    map[Y::FullGreen]           = {Y::FullFlush};
-    map[Y::FourWinds]           = {Y::AllHonors, Y::BigThreeDragons};
-    map[Y::NineGates]           = {Y::FullFlush, Y::SequentialSix, Y::PureStraight};
-    map[Y::MillionStone]        = {Y::FullFlush};
-    map[Y::OnePointRed]         = {Y::FullFlush};
-
+    map[Y::SequentialSix] = {Y::PureStraight, Y::NineGates};
+    map[Y::DragonPung] = {Y::SmallThreeDragons, Y::BigThreeDragons};
+    map[Y::PrevalentWind] = {Y::FourWinds};
+    map[Y::SeatWind] = {Y::FourWinds};
+    map[Y::PureDoubleSequence] = {Y::TwoPureDoubleSequences, Y::SevenPairs, Y::PureTripleSequence};
+    map[Y::FourPairs] = {Y::SevenPairs, Y::TwoPureDoubleSequences, Y::FourConcealedPungs, Y::FourWinds, Y::ThreeConcealedPungs, Y::PureTripleSequence};
+    map[Y::TwoConcealedPungs] = {Y::ThreeConcealedPungs, Y::FourConcealedPungs, Y::SmallThreeDragons, Y::BigThreeDragons, Y::FourWinds, Y::NineGates, Y::PureTripleSequence};
+    map[Y::SmallThreeDragons] = {Y::BigThreeDragons};
+    map[Y::PureStraight] = {Y::NineGates};
+    map[Y::AllTerminals] = {Y::MixedTerminalHonors, Y::AllHonors, Y::BigThreeDragons, Y::FourWinds};
+    map[Y::ThreeConcealedPungs] = {Y::BigThreeDragons, Y::FourWinds, Y::FourConcealedPungs, Y::PureTripleSequence};
+    map[Y::FiveFamilies] = {};
+    map[Y::MixedTerminalHonors] = {Y::BigThreeDragons, Y::FourWinds, Y::AllHonors};
+    map[Y::FullFlush] = {Y::MillionStone, Y::OnePointRed, Y::NineGates};
+    map[Y::FourConcealedPungs] = {Y::FourWinds};
+    map[Y::BigThreeDragons] = {Y::AllHonors};
+    map[Y::FourWinds] = {Y::AllHonors};
+    map[Y::FullGreen] = {Y::FullFlush};
     return map;
 }
 
@@ -554,26 +505,21 @@ void YakuCalculator::applyExclusions(std::vector<YakuResult>& detectedYakus) {
     detectedYakus = std::move(kept);
 }
 
-// 🔹 核心计分入口（严格按4分支流程）
+// 🔹 核心计分入口（已集成宝牌逻辑）
 ScoreResult YakuCalculator::calculateScore(const std::vector<Tile>& played,
                                            const std::vector<Tile>& playOrder,
                                            uint8_t prevalentWind,
-                                           uint8_t seatWind) {
+                                           uint8_t seatWind,
+                                           const Tile& doraTile) {
     ScoreResult res;
     if (played.empty()) return res;
 
     bool isWin = checkWinHand(played);
-
-    // 检测所有番型
     std::vector<YakuResult> active;
 
     // 1番系
     if (checkSequentialSix(played)) active.push_back({YakuType::SequentialSix, 1, "连六"});
     if (checkAllSimples(played)) active.push_back({YakuType::AllSimples, 1, "断幺"});
-
-    int pungCnt = 0;
-    if (checkTwoConcealedPungs(played, pungCnt)) active.push_back({YakuType::TwoConcealedPungs, 2, "双暗刻"});
-
     int dragonCnt = 0;
     if (checkDragonPung(played, dragonCnt)) active.push_back({YakuType::DragonPung, dragonCnt, "三元牌"});
     if (checkWindPung(played, prevalentWind)) active.push_back({YakuType::PrevalentWind, 1, "场风牌"});
@@ -582,6 +528,8 @@ ScoreResult YakuCalculator::calculateScore(const std::vector<Tile>& played,
 
     // 2番系
     if (checkFourPairs(played)) active.push_back({YakuType::FourPairs, 2, "四对"});
+    int pungCnt = 0;
+    if (checkTwoConcealedPungs(played, pungCnt)) active.push_back({YakuType::TwoConcealedPungs, 2, "双暗刻"});
     int quadCnt = 0;
     if (checkFourIdentical(played, quadCnt)) active.push_back({YakuType::FourIdentical, quadCnt * 2, "四归一"});
     if (checkSmallThreeDragons(played)) active.push_back({YakuType::SmallThreeDragons, 2, "小三元"});
@@ -620,34 +568,40 @@ ScoreResult YakuCalculator::calculateScore(const std::vector<Tile>& played,
         yakuSum += y.fan;
         res.activeYakus.push_back(y.type);
     }
-    bool hasYaku = (yakuSum > 0.0);
+    bool hasYaku = (yakuSum > 0);
 
-    // 🔹 严格按4分支计分
-    int allPoints = calculateBasePoints(played);
-    int firstFivePoints = 0;
-    int limit = std::min((int)playOrder.size(), 5);
-    for (int i = 0; i < limit; ++i) {
-        firstFivePoints += calculateBasePoints({playOrder[i]});
+    // 🔹 宝牌/赤宝牌计数加成（每张+0.5番）
+    double doraBonus = 0;
+    for (const auto& t : played) {
+        if (t.isRed) {
+            doraBonus += 0.5; // 赤宝牌
+        } else {
+            // 匹配普通宝牌（兼容 5 与 0 的等价性）
+            if (doraTile.suit == t.suit) {
+                if (doraTile.value == t.value) doraBonus += 0.5;
+                else if (doraTile.value == 5 && t.value == 0) doraBonus += 0.5; // 宝牌是5，打出赤5
+            }
+        }
     }
+
+    int allPts = calculateBasePoints(played);
+    int first5Pts = 0; int lim = std::min((int)playOrder.size(), 5);
+    for(int i=0;i<lim;++i){uint8_t v=(playOrder[i].value==0)?5:playOrder[i].value; first5Pts+=(playOrder[i].suit==TileSuit::ZI||v==1||v==9)?15:10;}
 
     if (!hasYaku) {
-        // 无役分支
         res.activeYakus = {YakuType::NoYaku};
-        res.basePoints = isWin ? allPoints : firstFivePoints;
-        res.totalFan = 0.5 * (isWin ? 3.0 : 1.0);
+        res.basePoints = isWin ? allPts : first5Pts;
+        res.totalFan = (0.5 + doraBonus) * (isWin ? 3.0 : 1.0);
     } else {
-        // 有役分支
-        res.basePoints = allPoints;
-        res.totalFan = (yakuSum + 0.5) * (isWin ? 3.0 : 1.0);
+        res.basePoints = allPts;
+        res.totalFan = (yakuSum + 0.5 + doraBonus) * (isWin ? 3.0 : 1.0);
     }
-
     res.isWinHand = isWin;
     res.finalScore = static_cast<int>(res.basePoints * res.totalFan);
     return res;
 }
 
-// yakucalculator.cpp - 文件末尾添加：
-
+// 🔹 番型名称映射（调试用）
 QString YakuCalculator::yakuName(YakuType type) {
     switch (type) {
     case YakuType::NoYaku: return "无役";
