@@ -55,7 +55,7 @@ public slots:
                                         "一索","二索","三索","四索","五索","六索","七索","八索","九索",
                                         "東","南","西","北","白","發","中"};
             int i=(t.suit==TileSuit::MAN?t.value:(t.suit==TileSuit::PIN?t.value+9:(t.suit==TileSuit::SOU?t.value+18:t.value+27)));
-            return(i>0&&i<35)?s[i-1]:t.id();
+            return(i>0&&i<35)?s[i]:t.id();
         };
         doraLabel->setText(QString("指示物: %1 | 宝牌: %2").arg(ts(ind)).arg(ts(dora)));
     }

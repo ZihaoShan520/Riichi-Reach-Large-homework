@@ -13,7 +13,7 @@ enum class YakuType : uint8_t {
     SevenPairs, TripleTriplets, MixedTerminalHonors, TwoPureDoubleSequences,
     FullFlush, PureTripleSequence,
     AllHonors, BigThreeDragons, FourConcealedPungs, FullGreen, FourWinds,
-    NineGates, MillionStone, OnePointRed
+    NineGates, MillionStone, OnePointRed,guoshi
 };
 
 struct YakuResult { YakuType type; int fan; std::string name; };
@@ -68,6 +68,7 @@ public:
     static bool checkNineGates(const std::vector<Tile>&);
     static bool checkMillionStone(const std::vector<Tile>&);
     static bool checkOnePointRed(const std::vector<Tile>&);
+    static bool checkguoshi(const std::vector<Tile>&);
 
     static void applyExclusions(std::vector<YakuResult>&);
     static std::unordered_map<YakuType, std::vector<YakuType>> buildExclusionMap();

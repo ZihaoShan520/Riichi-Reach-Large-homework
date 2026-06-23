@@ -11,27 +11,25 @@ QString GameManager::windToString(int windVal) {
     return (windVal >= 1 && windVal <= 4) ? names[windVal] : "?";
 }
 
+// 🔹 【严格修复】宝牌推算逻辑（完全隔离花色，精准映射）
 Tile GameManager::computeNextDora(const Tile& ind) {
-    Tile d = ind;          // ✅ 关键：完整拷贝指示物的 suit/value，杜绝花色丢失
-    d.isRed = false;       // 宝牌本身不带赤宝标记
+    Tile d = ind;          // ✅ 完整继承 suit，杜绝跨花色
+    d.isRed = false;       // 宝牌指示物绝不带赤宝标记
 
-    uint8_t v = (d.value == 0) ? 5 : d.value; // 赤宝视为5参与推算
+    uint8_t v = (ind.value == 0) ? 5 : ind.value; // 赤宝按5参与推算
 
     if (d.suit == TileSuit::ZI) {
-        // 字牌循环：东南西北(1-4)，白发中(5-7)
-        if (v == 4) d.value = 1;
-        else if (v == 7) d.value = 5;
-        else d.value = v + 1;
+        if (v >= 1 && v <= 3) d.value = v + 1; // 1东→2南, 2南→3西, 3西→4北
+        else if (v == 4)      d.value = 1;     // 4北→1东
+        else if (v == 5)      d.value = 6;     // 5白→6發
+        else if (v == 6)      d.value = 7;     // 6發→7中
+        else if (v == 7)      d.value = 5;     // 7中→5白
     } else {
-        // 数牌循环：1→2 ... 8→9, 9→1
-        d.value = (v % 9) + 1;
+        d.value = (v % 9) + 1; // 数牌 1→2 ... 9→1
     }
 
-    // 🔍 强制打印底层数据，方便定位是逻辑错误还是显示映射错误
-    qDebug() << "[🀄 DORA DEBUG] 指示物[" << ind.id()
-             << "] 花色Enum:" << (int)ind.suit << " 点数:" << v
-             << " -> 宝牌[" << d.id() << "] 花色Enum:" << (int)d.suit;
-
+    qDebug() << "[🀄 DORA MAP] 指示物[" << ind.id() << "] → 宝牌[" << d.id()
+             << "] | Suit:" << (int)d.suit << " Val:" << (int)d.value;
     return d;
 }
 
@@ -47,13 +45,10 @@ void GameManager::loadLevelConfig() {
     if (infiniteMode) { targetScore += (currentTier - 1) * 300; playCount = qMax(2, playCount - (currentTier - 1) / 2); }
     handMgr.initDeck();
 
-    // 🔹 抽取宝牌指示物
     if (handMgr.canDraw(1)) {
         currentDoraIndicator = handMgr.drawTiles(1)[0];
         currentDoraTile = computeNextDora(currentDoraIndicator);
         emit doraInfoUpdated(currentDoraIndicator, currentDoraTile);
-        qDebug() << "[🀄 DORA INIT] Indicator:" << currentDoraIndicator.id()
-                 << "→ Dora:" << currentDoraTile.id() << "(Val:" << currentDoraTile.value << ")";
     }
 
     int initDraw = qMin(18, handMgr.wallSize());
@@ -122,13 +117,12 @@ static QString tileToString(const Tile& t) {
                                 "一索","二索","三索","四索","五索","六索","七索","八索","九索",
                                 "東","南","西","北","白","發","中"};
     int idx = (t.suit==TileSuit::MAN?t.value:(t.suit==TileSuit::PIN?t.value+9:(t.suit==TileSuit::SOU?t.value+18:t.value+27)));
-    return (idx>0&&idx<35)?s[idx-1]:t.id();
+    return (idx>0&&idx<35)?s[idx]:t.id();
 }
 static int tileBasePoint(const Tile& t) { uint8_t v=(t.value==0)?5:t.value; return (t.suit==TileSuit::ZI||v==1||v==9)?15:10; }
 
-// 🔹 【核心修复】宝牌匹配逻辑 + 诊断日志
 int GameManager::calculatePlayScore(const std::vector<Tile>& playedSet, const std::vector<Tile>& playOrder) {
-    qDebug() << "\n🀄 [SCORE CALC START] | Dora Tile:" << currentDoraTile.id();
+    qDebug() << "\n🀄 [SCORE START] | Dora:" << currentDoraTile.id();
 
     QStringList tileList; int totalBasePoints = 0;
     for (const auto& t : playedSet) { int p = tileBasePoint(t); totalBasePoints += p; tileList.append(QString("%1(%2pt)").arg(tileToString(t)).arg(p)); }
@@ -137,33 +131,17 @@ int GameManager::calculatePlayScore(const std::vector<Tile>& playedSet, const st
     bool isWin = YakuCalculator::checkWinHand(playedSet);
     qDebug() << "🎯 Win Hand:" << (isWin ? "✅ YES" : "❌ NO");
 
+    // 传入宝牌进行计算
     ScoreResult result = YakuCalculator::calculateScore(playedSet, playOrder,
                                                         static_cast<uint8_t>(currentPrevalentWind),
                                                         static_cast<uint8_t>(currentSeatWind),
                                                         currentDoraTile);
 
     qDebug() << "\n🔍 Active Yakus:";
-    if (result.activeYakus.empty()) { qDebug() << "   [无役]"; } // ✅ 修复 isEmpty() -> empty()
+    if (result.activeYakus.empty()) { qDebug() << "   [无役]"; }
     else { for (YakuType y : result.activeYakus) qDebug() << "   •" << YakuCalculator::yakuName(y); }
 
-    // 🔹 修复后的宝牌/赤宝计数逻辑
-    int doraCount = 0;
-    for (const auto& t : playedSet) {
-        bool isMatch = false;
-        if (t.isRed) {
-            isMatch = true; // 赤宝必计
-        } else {
-            // 匹配普通宝牌（兼容 5 与 0 的等价性）
-            if (currentDoraTile.suit == t.suit) {
-                if (currentDoraTile.value == t.value) isMatch = true;
-                else if (currentDoraTile.value == 5 && t.value == 0) isMatch = true; // 宝牌是5，打出赤5
-            }
-        }
-        if (isMatch) doraCount++;
-    }
-    if (doraCount > 0) qDebug() << "🀄 Dora/Red Count:" << doraCount << " (+%" << (doraCount * 0.5) << " fan)";
-
-    qDebug() << "💰 FINAL: " << result.finalScore << " pts | Fan:" << result.totalFan << "\n" << QString(60, '=');
+    qDebug() << "💰 FINAL: " << result.finalScore << " pts | Total Fan:" << result.totalFan << "\n" << QString(60, '=');
     return result.finalScore;
 }
 
