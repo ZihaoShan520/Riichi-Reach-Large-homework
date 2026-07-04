@@ -23,6 +23,8 @@ qt_add_executable(Riichi_Reach
     manager/gamemanager.cpp
     core/YaKuCalculator.h
     yakucalculator.cpp
+    resources.qrc
+
 )
 
 target_link_libraries(Riichi_Reach

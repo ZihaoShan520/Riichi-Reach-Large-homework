@@ -1,0 +1,45 @@
+<!DOCTYPE RCC>
+<RCC version="1.0">
+    <qresource prefix="/tiles">
+        <file>images/1m.png</file>
+        <file>images/2m.png</file>
+        <file>images/3m.png</file>
+        <file>images/4m.png</file>
+        <file>images/5m.png</file>
+        <file>images/6m.png</file>
+        <file>images/7m.png</file>
+        <file>images/8m.png</file>
+        <file>images/9m.png</file>
+        <file>images/0m.png</file>
+        
+        <file>images/1p.png</file>
+        <file>images/2p.png</file>
+        <file>images/3p.png</file>
+        <file>images/4p.png</file>
+        <file>images/5p.png</file>
+        <file>images/6p.png</file>
+        <file>images/7p.png</file>
+        <file>images/8p.png</file>
+        <file>images/9p.png</file>
+        <file>images/0p.png</file>
+        
+        <file>images/1s.png</file>
+        <file>images/2s.png</file>
+        <file>images/3s.png</file>
+        <file>images/4s.png</file>
+        <file>images/5s.png</file>
+        <file>images/6s.png</file>
+        <file>images/7s.png</file>
+        <file>images/8s.png</file>
+        <file>images/9s.png</file>
+        <file>images/0s.png</file>
+        
+        <file>images/1z.png</file>
+        <file>images/2z.png</file>
+        <file>images/3z.png</file>
+        <file>images/4z.png</file>
+        <file>images/5z.png</file>
+        <file>images/6z.png</file>
+        <file>images/7z.png</file>
+    </qresource>
+</RCC>

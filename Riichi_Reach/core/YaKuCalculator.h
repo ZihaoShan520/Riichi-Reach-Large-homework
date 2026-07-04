@@ -23,6 +23,12 @@ struct ScoreResult {
     int finalScore = 0;
     bool isWinHand = false;
     std::vector<YakuType> activeYakus;
+    // 🔹 新增：用于UI展示的详细信息
+    int doraCount = 0;                     // 宝牌/赤宝总计数
+    double yakuFan = 0.0;                  // 纯役种番数（不含基础0.5）
+    double doraFan = 0.0;                  // 宝牌加成番数（doraCount × 0.5）
+    bool hasYaku = false;                  // 是否有主番（用于区分无役逻辑）
+    int countedTiles = 0;                  // 实际计分的牌数（无役未和牌时为5）
 };
 
 class YakuCalculator {
